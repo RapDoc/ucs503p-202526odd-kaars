@@ -43,5 +43,5 @@ A **job posting and resume optimization platform** that combines web-scraped job
 
 ### Deployment
 - **Backend** → Render / Railway / Heroku / AWS EC2
-- **Frontend** → Vercel / Netlify
+- **Frontend** →  https://ucs503p-202526odd-kaars.vercel.app/
 - **Database** → Supabase / PostgreSQL on cloud
