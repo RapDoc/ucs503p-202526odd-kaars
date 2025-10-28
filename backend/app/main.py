@@ -30,7 +30,9 @@ def serve_frontend():
 # ---------- CORS ----------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+    "https://rapdoc-frontend.onrender.com"  # update once deployed
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
