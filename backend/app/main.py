@@ -7,21 +7,36 @@ import json
 import re
 import google.generativeai as genai
 import tempfile
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import os
 
-# ---------- CONFIG ----------
-genai.configure(api_key="*")
-model = genai.GenerativeModel("gemini-2.5-flash")
-
+# ---------- INIT APP ----------
 app = FastAPI(title="Resume Matcher API")
 
-# Allow frontend to connect
+# Serve frontend build
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+@app.get("/")
+def serve_frontend():
+    index_path = os.path.join(static_dir, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return {"message": "Frontend build missing. Please deploy with render.yaml ⚙️"}
+
+# ---------- CORS ----------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # change to your frontend URL later
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ---------- CONFIG ----------
+genai.configure(api_key="YOUR_KEY")
+model = genai.GenerativeModel("gemini-2.5-flash")
 
 # ---------- UTILITIES ----------
 def extract_text_from_resume(file_path: str):
@@ -57,41 +72,31 @@ def parse_resume_with_gemini(resume_text):
 
 def get_job_score(resume_skills, job_skills):
     prompt = f"""
-    You are a job matching expert. 
-    Compare the candidate's skills with the job's required skills.
-    Candidate Skills: {', '.join(resume_skills)}
-    Job Skills: {', '.join(job_skills)}
-    Score (0-100): How compatible is this candidate for this job 
-    based only on the overlap and relevance of skills?
-    Return ONLY a JSON in this format:
+    Return ONLY JSON:
     {{
-        "score": number,
-        "reason": "brief reason for score"
+      "score": number,
+      "reason": "short reason"
     }}
+    Candidate Skills: {resume_skills}
+    Job Skills: {job_skills}
     """
     response = model.generate_content(prompt)
-    output = response.text.strip()
-    output = re.sub(r'^```json\s*', '', output)
-    output = re.sub(r'\s*```$', '', output)
-
     try:
-        return json.loads(output)
-    except Exception:
+        return json.loads(response.text)
+    except:
         return {"score": 0, "reason": "Parsing error"}
 
 # ---------- LOAD JOB DATA ----------
 df_jobs = pd.read_csv("cleaned_jobs_30.csv")
-df_jobs['skills_list'] = df_jobs['skills_clean'].fillna('').str.lower().str.split(r',\s*')
+df_jobs['skills_list'] = df_jobs['skills_clean'].fillna('').str.lower().split(', ')
 
 # ---------- API ROUTES ----------
 @app.post("/upload_resume")
 async def upload_resume(file: UploadFile = File(...)):
-    # Save uploaded file temporarily
     with tempfile.NamedTemporaryFile(delete=False, suffix=file.filename) as tmp:
         tmp.write(await file.read())
         tmp_path = tmp.name
 
-    # Extract text + skills
     resume_text = extract_text_from_resume(tmp_path)
     resume_skills = parse_resume_with_gemini(resume_text)
 
@@ -99,42 +104,15 @@ async def upload_resume(file: UploadFile = File(...)):
 
 @app.post("/match_jobs")
 async def match_jobs(resume_skills: list[str]):
-    print("Received skills:", resume_skills)
+    scores, reasons = [], []
 
-    try:
-        scores, reasons = [], []
+    for _, row in df_jobs.iterrows():
+        result = get_job_score(resume_skills, row["skills_list"])
+        scores.append(result["score"])
+        reasons.append(result["reason"])
 
-        for _, row in df_jobs.iterrows():
-            result = get_job_score(resume_skills, row["skills_list"])
-            scores.append(result.get("score", 0))
-            reasons.append(result.get("reason", "No reason"))
+    df_jobs["score"] = scores
+    df_jobs["reason"] = reasons
+    df_sorted = df_jobs.sort_values(by="score", ascending=False).head(10)
 
-        df_jobs["score"] = scores
-        df_jobs["reason"] = reasons
-        df_jobs_sorted = df_jobs.sort_values(by="score", ascending=False).head(10)
-        print("Hello")
-        jobs_list = []
-        for _, row in df_jobs_sorted.iterrows():
-            skills_array = row["skills_clean"].split(",") if row["skills_clean"] else []
-            jobs_list.append({
-                "job_title": row["job_title"],
-                "company": row["company_name"],
-                "location": row["location"],
-                "skills": [s.strip() for s in skills_array],
-                "reason": row["reason"] or "No reason provided",
-                "score": row["score"]
-            })
-
-        return jobs_list
-
-    except Exception as e:
-        print("Error in match_jobs:", e)
-        # Return empty array on error
-        return []
-
-
-
-# ---------- ROOT ----------
-@app.get("/")
-def home():
-    return {"message": "Resume Matcher API is running 🚀"}
+    return df_sorted.to_dict(orient="records")
