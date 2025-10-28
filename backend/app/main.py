@@ -1,7 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 import os, json, re, tempfile, logging
 import pdfplumber
 import docx
@@ -14,11 +12,6 @@ logging.basicConfig(level=logging.INFO)
 
 # ---------- INIT APP ----------
 app = FastAPI(title="Stark Resume Matcher v2")
-
-# Serve frontend build
-static_dir = os.path.join(os.path.dirname(__file__), "static")
-if os.path.exists(static_dir):
-    app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 @app.get("/")
 def serve_frontend():
