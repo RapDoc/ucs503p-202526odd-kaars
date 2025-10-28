@@ -1,3 +1,6 @@
+setuptools==70.0.0
+wheel==0.43.0
+
 fastapi==0.110.1
 uvicorn==0.30.1
 starlette==0.37.2
@@ -12,7 +15,7 @@ python-multipart==0.0.9
 jinja2==3.1.3
 
 pdfplumber==0.10.4
-python-docx==0.8.11   # older but stable
+python-docx==0.8.11
 
 pandas==1.5.3
 numpy==1.24.4
