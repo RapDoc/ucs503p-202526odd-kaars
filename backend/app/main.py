@@ -1,5 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse  # ADD THIS IMPORT
 import os, json, re, tempfile, logging
 import pdfplumber
 import docx
@@ -14,17 +15,15 @@ logging.basicConfig(level=logging.INFO)
 app = FastAPI(title="Stark Resume Matcher v2")
 
 @app.get("/")
-def serve_frontend():
-    index_path = os.path.join(static_dir, "index.html")
-    return FileResponse(index_path) if os.path.exists(index_path) else {
-        "message": "Frontend missing — deploy using render.yaml ⚙️"
-    }
+def read_root():
+    return {"message": "RapDoc API is running! 🚀", "status": "healthy"}
 
 # ---------- CORS ----------
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-    "https://rapdoc-frontend.onrender.com"  # update once deployed
+        "https://rapdoc-frontend.onrender.com",  # Update with your actual frontend URL after deployment
+        "http://localhost:5173",  # For local development
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -86,10 +85,13 @@ def compute_fit_score(resume_skills: List[str], job_skills: List[str]):
 
 # ---------- LOAD JOB DATA ----------
 try:
-    df_jobs = pd.read_csv("cleaned_jobs_30.csv")
+    # CSV is in the same directory as main.py
+    csv_path = os.path.join(os.path.dirname(__file__), "cleaned_jobs_30.csv")
+    df_jobs = pd.read_csv(csv_path)
     df_jobs["skills_list"] = df_jobs["skills_clean"].fillna("").apply(
         lambda x: [s.strip().lower() for s in str(x).split(",") if s.strip()]
     )
+    logging.info(f"Successfully loaded {len(df_jobs)} jobs from CSV")
 except Exception as e:
     raise RuntimeError(f"Failed to load job dataset: {e}")
 
@@ -105,6 +107,12 @@ async def upload_resume(file: UploadFile = File(...)):
 
     resume_text = extract_text_from_resume(tmp_path)
     resume_skills = parse_resume_with_gemini(resume_text)
+
+    # Clean up temp file
+    try:
+        os.unlink(tmp_path)
+    except:
+        pass
 
     logging.info(f"Extracted skills: {resume_skills}")
     return {"skills": resume_skills}
