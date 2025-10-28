@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: fullstack-app
+    env: python
+    buildCommand: |
+      pip install -r requirements.txt
+      cd frontend && npm install && npm run build
+      rm -rf ./backend/app/static
+      mv ./frontend/dist ./backend/app/static
+    startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
