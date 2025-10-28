@@ -2,6 +2,7 @@ services:
   - type: web
     name: resume-matcher
     env: python
+
     buildCommand: |
       pip install -r requirements.txt
       cd frontend
@@ -9,5 +10,7 @@ services:
       npm run build
       cd ..
       mkdir -p backend/app/static
+      rm -rf backend/app/static/*
       cp -r frontend/dist/* backend/app/static/
+
     startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
