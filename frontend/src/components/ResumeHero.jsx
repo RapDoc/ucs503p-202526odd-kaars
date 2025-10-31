@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Upload, FileText } from "lucide-react";
 import { useNavigate } from "react-router-dom"; // ✅ Add this if using React Router
+const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 const HeroSection = () => {
     const [file, setFile] = useState(null);
@@ -24,7 +25,7 @@ const HeroSection = () => {
 
         try {
             // Step 1: Upload resume and get skills
-            const skillRes = await fetch("http://127.0.0.1:8000/upload_resume", {
+            const skillRes = await fetch(`${API_BASE_URL}/upload_resume`, {
                 method: "POST",
                 body: formData,
             });
@@ -33,10 +34,10 @@ const HeroSection = () => {
             console.log("Skills received:", skillData.skills); // ✅ debug
 
             // Step 2: Send skills to match_jobs
-            const matchRes = await fetch("http://127.0.0.1:8000/match_jobs", {
+            const matchRes = await fetch(`${API_BASE_URL}/match_jobs`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(skillData.skills), // must be an array
+                body: JSON.stringify(skillData.skills),
             });
             console.log("sent 2")
             const jobs = await matchRes.json(); // ✅ read response properly
