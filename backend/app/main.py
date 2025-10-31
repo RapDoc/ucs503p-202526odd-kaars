@@ -81,7 +81,10 @@ def get_job_score(resume_skills, job_skills):
         return {"score": 0, "reason": "Parsing error"}
 
 # ---------- LOAD JOB DATA ----------
-df_jobs = pd.read_csv("cleaned_jobs_30.csv")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+csv_path = os.path.join(BASE_DIR, "cleaned_jobs_30.csv")
+
+df_jobs = pd.read_csv(csv_path)
 df_jobs['skills_list'] = df_jobs['skills_clean'].fillna('').str.lower().str.split(r',\s*')
 
 # ---------- API ROUTES ----------
