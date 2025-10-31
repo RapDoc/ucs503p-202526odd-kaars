@@ -7,9 +7,10 @@ import json
 import re
 import google.generativeai as genai
 import tempfile
+import os
 
 # ---------- CONFIG ----------
-genai.configure(api_key="AIzaSyCfcVGWT7YHpOvRZz3OXkuY46Z7gx1qiLo")
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 model = genai.GenerativeModel("gemini-2.5-flash")
 
 app = FastAPI(title="Resume Matcher API")
