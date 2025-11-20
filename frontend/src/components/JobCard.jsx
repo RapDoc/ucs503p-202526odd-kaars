@@ -33,7 +33,7 @@ const JobCard = ({ job }) => {
 
             {/* Reason */}
             <p className="text-sm text-gray-500 mb-3">
-                <strong>Reason:</strong> {reason}
+                <strong>Skills:</strong> {reason}
             </p>
 
             {/* Skills */}
