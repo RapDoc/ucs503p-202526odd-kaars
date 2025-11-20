@@ -4,11 +4,8 @@ from pydantic import BaseModel
 import pdfplumber
 import docx
 import pandas as pd
-import json
-import re
+import json, re, os, tempfile
 import google.generativeai as genai
-import tempfile
-import os
 
 # ---------- CONFIG ----------
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
@@ -16,14 +13,21 @@ model = genai.GenerativeModel("gemini-2.5-flash")
 
 app = FastAPI(title="Resume Matcher API")
 
-# Allow frontend to connect
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # change to your frontend URL later
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ---------- LOAD JOB DATA ----------
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+csv_path = os.path.join(BASE_DIR, "cleaned_jobs_30.csv")
+
+df_jobs = pd.read_csv(csv_path)
+df_jobs['skills_list'] = df_jobs['skills_clean'].fillna('').str.lower().str.split(r',\s*')
+
 
 # ---------- UTILITIES ----------
 def extract_text_from_resume(file_path: str):
@@ -40,6 +44,7 @@ def extract_text_from_resume(file_path: str):
             text += para.text + "\n"
     return text.strip()
 
+
 def parse_resume_with_gemini(resume_text):
     prompt = f"""
     Extract only the skills from the following resume.
@@ -49,13 +54,16 @@ def parse_resume_with_gemini(resume_text):
     """
     response = model.generate_content(prompt)
     output = response.text.strip()
+    
     match = re.search(r'\[.*\]', output, re.DOTALL)
     if match:
         try:
             return json.loads(match.group(0))
         except json.JSONDecodeError:
             pass
+    
     return [s.strip() for s in re.split(r',|\n|;', output) if s.strip()]
+
 
 def get_job_score(resume_skills, job_skills):
     prompt = f"""
@@ -63,12 +71,11 @@ def get_job_score(resume_skills, job_skills):
     Compare the candidate's skills with the job's required skills.
     Candidate Skills: {', '.join(resume_skills)}
     Job Skills: {', '.join(job_skills)}
-    Score (0-100): How compatible is this candidate for this job 
-    based only on the overlap and relevance of skills?
-    Return ONLY a JSON in this format:
+    Score (0-100): How compatible is this candidate for this job?
+    Return ONLY a JSON:
     {{
         "score": number,
-        "reason": "brief reason for score"
+        "reason": "brief reason"
     }}
     """
     response = model.generate_content(prompt)
@@ -78,67 +85,54 @@ def get_job_score(resume_skills, job_skills):
 
     try:
         return json.loads(output)
-    except Exception:
+    except:
         return {"score": 0, "reason": "Parsing error"}
 
-# ---------- LOAD JOB DATA ----------
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-csv_path = os.path.join(BASE_DIR, "cleaned_jobs_30.csv")
 
-df_jobs = pd.read_csv(csv_path)
-df_jobs['skills_list'] = df_jobs['skills_clean'].fillna('').str.lower().str.split(r',\s*')
-
-# ---------- API ROUTES ----------
+# ---------- ROUTES ----------
 @app.post("/upload_resume")
 async def upload_resume(file: UploadFile = File(...)):
-    # Save uploaded file temporarily
     with tempfile.NamedTemporaryFile(delete=False, suffix=file.filename) as tmp:
         tmp.write(await file.read())
         tmp_path = tmp.name
-
-    # Extract text + skills
+    
     resume_text = extract_text_from_resume(tmp_path)
     resume_skills = parse_resume_with_gemini(resume_text)
 
     return {"skills": resume_skills}
 
-    class SkillsInput(BaseModel):
-        skills: list[str]
-    
-    @app.post("/match_jobs")
-    async def match_jobs(data: SkillsInput):
-        resume_skills = [s.lower() for s in data.skills]
-    
-        print("Received skills:", resume_skills)
-    
-        scores, reasons = [], []
-    
-        for _, row in df_jobs.iterrows():
-            job_skills = [s.lower() for s in row["skills_list"]]
-            result = get_job_score(resume_skills, job_skills)
-    
-            print(result)
-    
-            scores.append(result.get("score", 0))
-            reasons.append(result.get("reason", "No reason"))
-    
-        df_jobs["score"] = scores
-        df_jobs["reason"] = reasons
-    
-        df_jobs_sorted = df_jobs[df_jobs["score"] > 0].sort_values(
-            by="score", ascending=False
-        ).head(10)
-    
-        return df_jobs_sorted.to_dict(orient="records")
 
-    except Exception as e:
-        print("Error in match_jobs:", e)
-        # Return empty array on error
-        return []
+# ➤ FIX: DEFINE CLASS AND ROUTE HERE (TOP LEVEL)
+class SkillsInput(BaseModel):
+    skills: list[str]
 
 
+@app.post("/match_jobs")
+async def match_jobs(data: SkillsInput):
+    resume_skills = [s.lower() for s in data.skills]
+    print("Received skills:", resume_skills)
 
-# ---------- ROOT ----------
+    scores, reasons = [], []
+
+    for _, row in df_jobs.iterrows():
+        job_skills = [s.lower() for s in row["skills_list"]]
+        result = get_job_score(resume_skills, job_skills)
+
+        print(result)
+
+        scores.append(result.get("score", 0))
+        reasons.append(result.get("reason", "No reason"))
+
+    df_jobs["score"] = scores
+    df_jobs["reason"] = reasons
+
+    df_jobs_sorted = df_jobs[df_jobs["score"] > 0].sort_values(
+        by="score", ascending=False
+    ).head(10)
+
+    return df_jobs_sorted.to_dict(orient="records")
+
+
 @app.get("/")
 def home():
     return {"message": "Resume Matcher API is running 🚀"}
