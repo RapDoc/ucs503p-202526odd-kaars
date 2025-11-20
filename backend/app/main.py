@@ -1,5 +1,6 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 import pdfplumber
 import docx
 import pandas as pd
@@ -101,35 +102,34 @@ async def upload_resume(file: UploadFile = File(...)):
 
     return {"skills": resume_skills}
 
-@app.post("/match_jobs")
-async def match_jobs(resume_skills: list[str]):
-    print("Received skills:", resume_skills)
-
-    try:
+    class SkillsInput(BaseModel):
+        skills: list[str]
+    
+    @app.post("/match_jobs")
+    async def match_jobs(data: SkillsInput):
+        resume_skills = [s.lower() for s in data.skills]
+    
+        print("Received skills:", resume_skills)
+    
         scores, reasons = [], []
-
+    
         for _, row in df_jobs.iterrows():
-            result = get_job_score(resume_skills, row["skills_list"])
+            job_skills = [s.lower() for s in row["skills_list"]]
+            result = get_job_score(resume_skills, job_skills)
+    
+            print(result)
+    
             scores.append(result.get("score", 0))
             reasons.append(result.get("reason", "No reason"))
-
+    
         df_jobs["score"] = scores
         df_jobs["reason"] = reasons
-        df_jobs_sorted = df_jobs.sort_values(by="score", ascending=False).head(10)
-        print("Hello")
-        jobs_list = []
-        for _, row in df_jobs_sorted.iterrows():
-            skills_array = row["skills_clean"].split(",") if row["skills_clean"] else []
-            jobs_list.append({
-                "job_title": row["job_title"],
-                "company": row["company_name"],
-                "location": row["location"],
-                "skills": [s.strip() for s in skills_array],
-                "reason": row["reason"] or "No reason provided",
-                "score": row["score"]
-            })
-
-        return jobs_list
+    
+        df_jobs_sorted = df_jobs[df_jobs["score"] > 0].sort_values(
+            by="score", ascending=False
+        ).head(10)
+    
+        return df_jobs_sorted.to_dict(orient="records")
 
     except Exception as e:
         print("Error in match_jobs:", e)
