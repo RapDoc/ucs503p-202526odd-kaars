@@ -1,6 +1,6 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from typing import List
 import pdfplumber
 import docx
 import pandas as pd
@@ -105,14 +105,9 @@ async def upload_resume(file: UploadFile = File(...)):
     return {"skills": resume_skills}
 
 
-# ➤ FIX: DEFINE CLASS AND ROUTE HERE (TOP LEVEL)
-class SkillsInput(BaseModel):
-    skills: list[str]
-
-
 @app.post("/match_jobs")
-async def match_jobs(data: SkillsInput):
-    resume_skills = [s.lower() for s in data.skills]
+async def match_jobs(resume_skills: List[str]):
+    resume_skills = [s.lower() for s in resume_skills]
     print("Received skills:", resume_skills)
 
     scores, reasons = [], []
@@ -120,8 +115,6 @@ async def match_jobs(data: SkillsInput):
     for _, row in df_jobs.iterrows():
         job_skills = [s.lower() for s in row["skills_list"]]
         result = get_job_score(resume_skills, job_skills)
-
-        print(result)
 
         scores.append(result.get("score", 0))
         reasons.append(result.get("reason", "No reason"))
