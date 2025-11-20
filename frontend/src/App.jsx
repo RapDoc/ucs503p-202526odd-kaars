@@ -15,6 +15,7 @@ const App = () => {
         <Route path="/joblistings" element={<JobGrid jobs={jobs} />} />
         <Route path="/" element={<ResumeUpload />} />
         <Route path="/recommendedjobs" element={<RecommendedJobs />} />
+        <Route path="/atsscoring" element={<ResumeUpload />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>
